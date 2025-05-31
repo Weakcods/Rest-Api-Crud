@@ -145,7 +145,7 @@ def test_get_all_users_api_with_data(client, sample_user):
     assert response.status_code == 200
     assert data['status'] == 200
     assert len(data['data']) == 1
-    assert data['data'][0][1] == 'Test User'
+    assert data['data'][0]['name'] == 'Test User'
 
 def test_get_specific_user_api_success(client, sample_user):
     """Test API endpoint for getting specific user."""
@@ -153,41 +153,41 @@ def test_get_specific_user_api_success(client, sample_user):
     data = json.loads(response.data)
     assert response.status_code == 200
     assert data['status'] == 200
-    assert data['data'][0][1] == 'Test User'
+    assert data['data'][0]['name'] == 'Test User'
 
 def test_get_specific_user_api_nonexistent(client):
     """Test API endpoint for getting non-existent user."""
     response = client.get('/user/999')
     data = json.loads(response.data)
-    assert response.status_code == 200
+    assert response.status_code == 404
     assert data['status'] == 404
     assert 'User not exists' in data['message']
 
 def test_create_user_api_success(client):
     """Test API endpoint for creating user."""
-    response = client.post('/user', data={
+    response = client.post('/user', json={
         'name': 'API User',
         'email': 'api@example.com',
-        'pwd': 'apipass',
+        'password': 'apipass',
         'mobile': '1231231234'
     })
     data = json.loads(response.data)
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert data['status'] == 201
-    assert 'user_id' in data
+    assert 'id' in data['data']
 
 def test_create_user_api_invalid(client):
     """Test API endpoint for creating user with invalid data."""
-    response = client.post('/user', data={})
+    response = client.post('/user', json={})
     data = json.loads(response.data)
-    assert response.status_code == 200
+    assert response.status_code == 201
     # API creates user with empty strings for missing fields
     assert data['status'] == 201
-    assert 'user_id' in data
+    assert 'id' in data['data']
 
 def test_update_user_api_success(client, sample_user):
     """Test API endpoint for updating user."""
-    response = client.put(f'/user/{sample_user.id}', data={
+    response = client.put(f'/user/{sample_user.id}', json={
         'name': 'Updated API User',
         'email': 'updated_api@example.com'
     })
@@ -202,11 +202,11 @@ def test_update_user_api_success(client, sample_user):
 
 def test_update_user_api_nonexistent(client):
     """Test API endpoint for updating non-existent user."""
-    response = client.put('/user/999', data={
+    response = client.put('/user/999', json={
         'name': 'Updated Name'
     })
     data = json.loads(response.data)
-    assert response.status_code == 200
+    assert response.status_code == 404
     assert data['status'] == 404
 
 def test_delete_user_api_success(client, sample_user):
@@ -224,5 +224,5 @@ def test_delete_user_api_nonexistent(client):
     """Test API endpoint for deleting non-existent user."""
     response = client.delete('/user/999')
     data = json.loads(response.data)
-    assert response.status_code == 200
+    assert response.status_code == 404
     assert data['status'] == 404

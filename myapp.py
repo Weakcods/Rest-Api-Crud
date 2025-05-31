@@ -1,6 +1,6 @@
 from flask import (
     Flask, request, jsonify, render_template, redirect, url_for, flash)
-from werkzeug.exceptions import NotFound
+from werkzeug import exceptions as werkzeug_exceptions
 from settings import db, app
 from models import User
 
@@ -114,23 +114,25 @@ def get_all_users():
 
 @app.route('/user/<int:id>', methods=['GET'])
 def get_specific_user(id):
-      
-    message = {
-      'status': 404,
-      'message': 'User not exists'
-    }
-    data = User.query.with_entities(
-      User.id, User.name,
-      User.email, User.mobile_number,
-      User.password).filter_by(id=id).all()
-    if len(data) == 0:
-        return jsonify(message)
-    message.update({
-      'status': 200,
-      'message': 'ALl records are fetched',
-      'data': data
-    })
-    return jsonify(message)
+    """Get a specific user via API."""
+    user = User.query.filter_by(id=id).first()
+    if not user:
+        return jsonify({
+            'status': 404,
+            'message': 'User not exists',
+            'data': None
+        }), 404
+    
+    return jsonify({
+        'status': 200,
+        'message': 'User retrieved successfully',
+        'data': [{
+            'id': user.id,
+            'name': user.name,
+            'email': user.email,
+            'mobile': user.mobile_number
+        }]
+    }), 200
 
 
 @app.route('/user', methods=['POST'])
@@ -246,14 +248,15 @@ def delete_user(id):
             'message': 'User deleted successfully',
             'data': user_data
         }), 200
+    except werkzeug_exceptions.NotFound:
+        db.session.rollback()
+        return jsonify({
+            'status': 404,
+            'message': 'User not found',
+            'data': None
+        }), 404
     except Exception as e:
         db.session.rollback()
-        if isinstance(e, werkzeug.exceptions.NotFound):
-            return jsonify({
-                'status': 404,
-                'message': 'User not found',
-                'data': None
-            }), 404
         return jsonify({
             'status': 500,
             'message': f'Error deleting user: {str(e)}',
