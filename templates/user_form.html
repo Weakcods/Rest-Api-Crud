@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <h2>{% if user %}Edit User{% else %}Create User{% endif %}</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="name" class="form-label">Name</label>
+                <input type="text" class="form-control" id="name" name="name" value="{{ user[1] if user else '' }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="email" name="email" value="{{ user[2] if user else '' }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="mobile" class="form-label">Mobile Number</label>
+                <input type="text" class="form-control" id="mobile" name="mobile" value="{{ user[3] if user else '' }}" required>
+            </div>
+            <div class="mb-3">
+                <label for="pwd" class="form-label">Password</label>
+                <input type="password" class="form-control" id="pwd" name="pwd" {% if not user %}required{% endif %}>
+                {% if user %}<small class="text-muted">Leave blank to keep current password</small>{% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary">{% if user %}Update{% else %}Create{% endif %}</button>
+            <a href="{{ url_for('list_users') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
