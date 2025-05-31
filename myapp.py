@@ -1,41 +1,120 @@
 from flask import (
-  Flask, request, jsonify)
+    Flask, request, jsonify, render_template, redirect, url_for, flash)
+from werkzeug.exceptions import NotFound
 from settings import db, app
 from models import User
 
 
+# Web interface routes
+@app.route('/')
+def index():
+   
+    return redirect(url_for('list_users'))
+
+
+@app.route('/web/users')
+def list_users():
+   
+    try:
+        users = User.query.with_entities(
+            User.id, User.name,
+            User.email, User.mobile_number).all()
+        return render_template('users.html', users=users)
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'danger')
+        return render_template('users.html', users=[])
+
+
+@app.route('/web/users/create', methods=['GET', 'POST'])
+def create_user_form():
+    
+    if request.method == 'POST':
+        try:
+            user = User(
+                name=request.form['name'],
+                email=request.form['email'],
+                password=request.form['pwd'],
+                mobile_number=request.form['mobile']
+            )
+            db.session.add(user)
+            db.session.commit()
+            flash('User created successfully!', 'success')
+            return redirect(url_for('list_users'))
+        except Exception as e:
+            flash(f'Error: {str(e)}', 'danger')
+    return render_template('user_form.html')
+
+
+@app.route('/web/users/<int:id>/edit', methods=['GET', 'POST'])
+def edit_user_form(id):
+    
+    user = User.query.with_entities(
+        User.id, User.name,
+        User.email, User.mobile_number).filter_by(id=id).first()
+    
+    if not user:
+        flash('User not found!', 'danger')
+        return redirect(url_for('list_users'))
+    
+    if request.method == 'POST':
+        try:
+            current_user = User.query.get(id)
+            current_user.name = request.form['name']
+            current_user.email = request.form['email']
+            current_user.mobile_number = request.form['mobile']
+            if request.form['pwd']:
+                current_user.password = request.form['pwd']
+            
+            db.session.commit()
+            flash('User updated successfully!', 'success')
+            return redirect(url_for('list_users'))
+        except Exception as e:
+            flash(f'Error: {str(e)}', 'danger')
+    
+    return render_template('user_form.html', user=user)
+
+
+@app.route('/web/users/<int:id>/delete', methods=['POST'])
+def delete_user_web(id):
+    
+    try:
+        user = User.query.get_or_404(id)
+        db.session.delete(user)
+        db.session.commit()
+        flash('User deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'danger')
+    return redirect(url_for('list_users'))
+
+
 @app.route('/user', methods=['GET'])
 def get_all_users():
-    """
-    this function is map with /user endpoint and 
-    it render all user records using GET Http method
-    """
-    message = {
-      'status': 404,
-      'message': 'Something went wrong'
-    }
+    """Get all users via API."""
     try:
-        data = User.query.with_entities(
-          User.id, User.name,
-          User.email, User.mobile_number,
-          User.password).all()
-        message.update({
-          'status': 200,
-          'message': 'ALl records are fetched',
-          'data': data
-        })
-    except:
-        pass
-    return jsonify(message)
+        users = User.query.all()
+        user_list = [{
+            'id': user.id,
+            'name': user.name,
+            'email': user.email,
+            'mobile': user.mobile_number
+        } for user in users]
+        
+        return jsonify({
+            'status': 200,
+            'message': 'Users retrieved successfully',
+            'data': user_list
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 500,
+            'message': f'Error retrieving users: {str(e)}',
+            'data': None
+        }), 500
 
 
 @app.route('/user/<int:id>', methods=['GET'])
 def get_specific_user(id):
-    """
-    this function is map with /user/pk endpoint and 
-    it render specific user records with respect to its pk 
-    using GET Http method
-    """    
+      
     message = {
       'status': 404,
       'message': 'User not exists'
@@ -56,105 +135,132 @@ def get_specific_user(id):
 
 @app.route('/user', methods=['POST'])
 def create_user():
-    """
-    this function is map with /user endpoint and 
-    it create user records using POST Http method
-    """    
-    message = {
-      'status': 404,
-      'message': 'Something went wrong'
-      }
+    """Create a new user via API."""
+    if not request.is_json:
+        return jsonify({
+            'status': 400,
+            'message': 'Content-Type must be application/json',
+            'data': None
+        }), 400
+    
+    data = request.get_json()
+    
     try:
-        name = request.form.get('name', '')
-        email = request.form.get('email', '')
-        password = request.form.get('pwd', '')
-        mobile_number = request.form.get('mobile', '')
         user = User(
-          name=name,
-          email=email,
-          password=password,
-          mobile_number=mobile_number
+            name=data.get('name', ''),
+            email=data.get('email', ''),
+            password=data.get('password', ''),
+            mobile_number=data.get('mobile', '')
         )
         db.session.add(user)
         db.session.commit()
-        message.update({
+        
+        return jsonify({
             'status': 201,
-            'message': 'User created successfully!!! ',
-            'user_id': user.id
-        })
-    except:
-        pass
-    resp = jsonify(message)
-    return resp
+            'message': 'User created successfully',
+            'data': {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'mobile': user.mobile_number
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 500,
+            'message': f'Error creating user: {str(e)}',
+            'data': None
+        }), 500
 
 
 @app.route('/user/<int:id>', methods=['PUT'])
 def update_user(id):
-    """
-    this function is map with /user/pk endpoint and 
-    it update specific user records using PUT Http method
-    """  
-    message = {
-      'status': 404,
-      'message': 'user not found'
-    }
-    try:
-        new_name = request.form.get('name', None)
-        new_email = request.form.get('email', None)
-        new_password = request.form.get('pwd', None)
-        new_mobile_number = request.form.get('mobile', None)
-        try:
-            current_user = User.query.get_or_404(id)
-        except:
-            return jsonify(message)
+    """Update an existing user via API."""
+    if not request.is_json:
+        return jsonify({
+            'status': 400,
+            'message': 'Content-Type must be application/json',
+            'data': None
+        }), 400
 
-        if new_email:
-            current_user.email = new_email
-        if new_name:
-            current_user.name = new_name
-        if new_password:
-            current_user.password = new_password
-        if new_mobile_number:
-            current_user.mobile_number = new_mobile_number
+    try:
+        current_user = User.query.get_or_404(id)
+    except:
+        return jsonify({
+            'status': 404,
+            'message': 'User not found',
+            'data': None
+        }), 404
+
+    try:
+        data = request.get_json()
+        
+        if 'name' in data:
+            current_user.name = data['name']
+        if 'email' in data:
+            current_user.email = data['email']
+        if 'password' in data:
+            current_user.password = data['password']
+        if 'mobile' in data:
+            current_user.mobile_number = data['mobile']
 
         db.session.commit()
-        message.update({
-          'status': 200,
-          'message': 'User details updated successfully!!! '
-        })
-    except:
-        pass
-    resp = jsonify(message)
-    return resp
+        
+        return jsonify({
+            'status': 200,
+            'message': 'User updated successfully',
+            'data': {
+                'id': current_user.id,
+                'name': current_user.name,
+                'email': current_user.email,
+                'mobile': current_user.mobile_number
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 500,
+            'message': f'Error updating user: {str(e)}',
+            'data': None
+        }), 500
 
 
 @app.route('/user/<int:id>', methods=['DELETE'])
 def delete_user(id):
-    """
-    this function is map with /user/pk endpoint and 
-    it delete specific user records using DELETE Http method
-    """  
-    message = {
-      'status': 404,
-      'message': 'user not found'
-    }
+    """Delete a user via API."""
     try:
-        current_user = User.query.get_or_404(id)
-        db.session.delete(current_user)
+        user = User.query.get_or_404(id)
+        user_data = {
+            'id': user.id,
+            'name': user.name,
+            'email': user.email,
+            'mobile': user.mobile_number
+        }
+        
+        db.session.delete(user)
         db.session.commit()
-        message.update({
-          'status': 200,
-          'message': 'user record delete successfully!!! '
-        })
-    except:
-        pass
-    resp = jsonify(message)
-    return resp
+        
+        return jsonify({
+            'status': 200,
+            'message': 'User deleted successfully',
+            'data': user_data
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        if isinstance(e, werkzeug.exceptions.NotFound):
+            return jsonify({
+                'status': 404,
+                'message': 'User not found',
+                'data': None
+            }), 404
+        return jsonify({
+            'status': 500,
+            'message': f'Error deleting user: {str(e)}',
+            'data': None
+        }), 500
 
 
 if __name__ == "__main__":
     db.create_all()
-    app.run(host="0.0.0.0", debug=True)
-
-
-
+    app.run(host="127.0.0.1", port=5000, debug=True)
